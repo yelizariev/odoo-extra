@@ -1218,7 +1218,7 @@ class RunbotController(http.Controller):
         pool, cr, uid, context = request.registry, request.cr, 1, request.context
         Build = pool['runbot.build']
 
-        domain = [('branch_id.branch_name', '=', branch_name)]
+        domain = [('branch_id.branch_name', '=', branch_name), ('state', '=', 'running')]
         builds = Build.search(cr, uid, domain, order="sequence desc", limit=1, context=context)
 
         if builds:
