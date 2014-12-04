@@ -33,6 +33,8 @@ from openerp.tools import config, appdirs
 from openerp.addons.website.models.website import slug
 from openerp.addons.website_sale.controllers.main import QueryURL
 
+DEVNULL = open(os.devnull, 'w+b')
+
 _logger = logging.getLogger(__name__)
 
 #----------------------------------------------------------
@@ -697,7 +699,7 @@ class runbot_build(osv.osv):
 
         return cmd, modules
 
-    def spawn(self, cmd, lock_path, log_path, cpu_limit=None, shell=False, showstderr=False):
+    def spawn(self, cmd, lock_path, cpu_limit=None, **kwargs):
         def preexec_fn():
             os.setsid()
             if cpu_limit:
@@ -709,13 +711,8 @@ class runbot_build(osv.osv):
             # close parent files
             os.closerange(3, os.sysconf("SC_OPEN_MAX"))
             lock(lock_path)
-        out=open(log_path,"w")
-        _logger.debug("spawn: %s stdout: %s", ' '.join(cmd), log_path)
-        if showstderr:
-            stderr = out
-        else:
-            stderr = open(os.devnull, 'w')
-        p=subprocess.Popen(cmd, stdout=out, stderr=stderr, preexec_fn=preexec_fn, shell=shell)
+        _logger.debug("spawn: %s", ' '.join(cmd))
+        p=subprocess.Popen(cmd, preexec_fn=preexec_fn, **kwargs)
         return p.pid
 
     def github_status(self, cr, uid, ids, context=None):
@@ -759,8 +756,11 @@ class runbot_build(osv.osv):
         cmd, mods = build.cmd()
         if grep(build.server("tools/config.py"), "test-enable"):
             cmd.append("--test-enable")
-        cmd += ['-d', '%s-base' % build.dest, '-i', 'base', '--stop-after-init', '--log-level=test', '--max-cron-threads=0']
-        return self.spawn(cmd, lock_path, log_path, cpu_limit=300)
+        cmd += ['-d', '%s-base' % build.dest, '-i', 'base',
+                '--log-level=test', '--logfile=%s' % log_path,
+                '--stop-after-init', '--max-cron-threads=0']
+        return self.spawn(cmd, lock_path, cpu_limit=300,
+                          stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL)
 
     def job_20_test_all(self, cr, uid, build, lock_path, log_path):
         build._log('test_all', 'Start test all modules')
@@ -768,10 +768,13 @@ class runbot_build(osv.osv):
         cmd, mods = build.cmd()
         if grep(build.server("tools/config.py"), "test-enable"):
             cmd.append("--test-enable")
-        cmd += ['-d', '%s-all' % build.dest, '-i', mods, '--stop-after-init', '--log-level=test', '--max-cron-threads=0']
+        cmd += ['-d', '%s-all' % build.dest, '-i', mods,
+                '--log-level=test', '--logfile=%s' % log_path,
+                '--stop-after-init', '--max-cron-threads=0']
         # reset job_start to an accurate job_20 job_time
         build.write({'job_start': now()})
-        return self.spawn(cmd, lock_path, log_path, cpu_limit=2100)
+        return self.spawn(cmd, lock_path, cpu_limit=2100,
+                          stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL)
 
     def job_30_run(self, cr, uid, build, lock_path, log_path):
         # adjust job_end to record an accurate job_20 job_time
@@ -803,7 +806,7 @@ class runbot_build(osv.osv):
             # not sure, to avoid old server to check other dbs
             cmd += ["--max-cron-threads", "0"]
 
-        cmd += ['-d', "%s-all" % build.dest]
+        cmd += ['-d', "%s-all" % build.dest, '--logfile=%s' % log_path]
 
         if grep(build.server("tools/config.py"), "db-filter"):
             if build.repo_id.nginx:
@@ -823,7 +826,8 @@ class runbot_build(osv.osv):
         #    f.close()
         #cmd=[self.client_web_bin_path]
 
-        return self.spawn(cmd, lock_path, log_path, cpu_limit=None, showstderr=True)
+        return self.spawn(cmd, lock_path, cpu_limit=None,
+                          stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL)
 
     def force(self, cr, uid, ids, context=None):
         """Force a rebuild"""
