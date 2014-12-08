@@ -83,13 +83,13 @@ def rfind(filename, pattern):
     return False
 
 def lock(filename):
-    fd = os.open(filename, os.O_CREAT | os.O_RDWR, 0600)
+    fd = os.open(filename, os.O_CREAT | os.O_RDWR, 0o600)
     fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 def locked(filename):
     result = False
     try:
-        fd = os.open(filename, os.O_CREAT | os.O_RDWR, 0600)
+        fd = os.open(filename, os.O_CREAT | os.O_RDWR, 0o600)
         try:
             fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except IOError:
