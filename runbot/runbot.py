@@ -471,6 +471,14 @@ class runbot_build(osv.osv):
                 result[build.id] = "%s:%s" % (domain, build.port)
         return result
 
+    def _get_pending_position(self, cr, uid, ids, field_name, arg, context=None):
+        """ Get the position of current build in pending queue """
+        result = {}
+        pending_builds = self.search_read(cr, uid, [('state', '=', 'pending')], order='sticky, sequence asc')
+        for build_id in ids:
+            result[build_id] = pending_builds.index(build_id) + 1
+        return result
+
     _columns = {
         'branch_id': fields.many2one('runbot.branch', 'Branch', required=True, ondelete='cascade', select=1),
         'repo_id': fields.related('branch_id', 'repo_id', type="many2one", relation="runbot.repo", string="Repository", readonly=True, store=True, ondelete='cascade', select=1),
@@ -496,6 +504,12 @@ class runbot_build(osv.osv):
         'job_time': fields.function(_get_time, type='integer', string='Job time'),
         'job_age': fields.function(_get_age, type='integer', string='Job age'),
         'duplicate_id': fields.many2one('runbot.build', 'Corresponding Build'),
+        'sticky': fields.related('branch_id', 'sticky', type='boolean', string='Sticky',
+            store={
+                'runbot.build': (lambda self, cr, uid, ids, c=None: ids, ['branch_id'], 10),
+                'runbot.branch': (lambda self, cr, uid, ids, c=None: {bu.branch_id.id: True for bu in self.browse(cr, uid, ids, c)}, ['sticky'], 10),
+            }),
+        'pending_position': fields.function(_get_pending_position, type='integer', string='Position'),
     }
 
     _defaults = {
